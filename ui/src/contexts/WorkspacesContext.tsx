@@ -1,0 +1,269 @@
+/**
+ * WorkspacesContext — shared state for the Workspaces feature.
+ *
+ * Session selection is driven entirely by OpenAlice's tab system: a session
+ * tab carries `{ kind: 'workspace', params: { wsId, sessionId } }`, and
+ * which session is "active" is whichever tab is focused. The provider's
+ * job is to:
+ *
+ *   - poll the workspaces list and templates/agents one-shot
+ *   - drive spawn/pause/resume/delete actions against the backend
+ *   - reconcile tab state with server state (e.g., close orphan tabs when
+ *     a session/workspace disappears from the list)
+ *
+ * Closing a tab via its X button does NOT delete or pause the session —
+ * VS-Code-style "close editor view, server keeps running". To actually
+ * remove a session, use the sidebar's × button.
+ */
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react'
+
+import '../components/workspace/workspaces.css'
+
+import { WorkspaceAIConfigModal } from '../components/workspace/WorkspaceAIConfigModal'
+import {
+  deleteSession as apiDeleteSession,
+  listAgents,
+  listTemplates,
+  listWorkspaces,
+  pauseSession as apiPauseSession,
+  resumeSession as apiResumeSession,
+  spawnSession,
+  type AgentInfo,
+  type SessionRecord,
+  type TemplateInfo,
+  type Workspace,
+} from '../components/workspace/api'
+import { useWorkspace } from '../tabs/store'
+
+const LIST_POLL_MS = 3000
+
+export interface SpawnOpts {
+  readonly resume?: 'last' | string
+  readonly agent?: string
+}
+
+interface WorkspacesContextValue {
+  readonly workspaces: readonly Workspace[]
+  readonly templates: readonly TemplateInfo[]
+  readonly agents: readonly AgentInfo[]
+  readonly listError: string | null
+  refresh(): void
+  spawn(wsId: string, opts?: SpawnOpts): Promise<void>
+  pauseSession(wsId: string, sessionId: string): Promise<void>
+  resumeSession(wsId: string, sessionId: string): Promise<void>
+  deleteSession(wsId: string, sessionId: string): Promise<void>
+  /** Open the per-workspace AI-provider config modal for `wsId`. */
+  openAgentConfig(wsId: string): void
+}
+
+const WorkspacesContext = createContext<WorkspacesContextValue | null>(null)
+
+export function WorkspacesProvider({ children }: { children: ReactNode }) {
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [templates, setTemplates] = useState<TemplateInfo[]>([])
+  const [agents, setAgents] = useState<AgentInfo[]>([])
+  const [listError, setListError] = useState<string | null>(null)
+  // Don't reconcile orphan tabs until we've successfully fetched the
+  // workspaces list at least once — otherwise the initial `[]` looks like
+  // "every workspace was just deleted" and a deep-linked workspace URL
+  // gets its freshly-opened tab closed before the first poll lands.
+  const [hasLoaded, setHasLoaded] = useState(false)
+  // AI-provider config modal target. Lifted to context so the sidebar
+  // gear button (no workspace tab needed) and the WorkspacePage header
+  // button share one modal instance — and the modal survives activity
+  // switches (rendered here, not inside an activity-scoped component).
+  const [configuringWsId, setConfiguringWsId] = useState<string | null>(null)
+
+  const openOrFocus = useWorkspace((s) => s.openOrFocus)
+  const closeTab = useWorkspace((s) => s.closeTab)
+
+  const refresh = useCallback(async (): Promise<void> => {
+    try {
+      const list = await listWorkspaces()
+      setWorkspaces(list)
+      setHasLoaded(true)
+      setListError(null)
+    } catch (err) {
+      setListError((err as Error).message)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refresh()
+    const id = setInterval(() => void refresh(), LIST_POLL_MS)
+    return () => clearInterval(id)
+  }, [refresh])
+
+  useEffect(() => {
+    void listTemplates().then(setTemplates).catch(() => setTemplates([]))
+    void listAgents().then(setAgents).catch(() => setAgents([]))
+  }, [])
+
+  // Reconcile tabs against the workspaces list. If a workspace or session
+  // disappeared (deleted on disk / on the server), close any tabs that
+  // referenced it so they don't dangle as 404s.
+  useEffect(() => {
+    if (!hasLoaded) return
+    const validW = new Set<string>()
+    const validS = new Set<string>() // key = `${wsId}::${sessionId}`
+    for (const w of workspaces) {
+      validW.add(w.id)
+      for (const s of w.sessions) validS.add(`${w.id}::${s.id}`)
+    }
+    const tabsSnap = useWorkspace.getState().tabs
+    for (const tabId of Object.keys(tabsSnap)) {
+      const t = tabsSnap[tabId]
+      if (!t || t.spec.kind !== 'workspace') continue
+      const wsId = t.spec.params.wsId
+      const sid = t.spec.params.sessionId
+      if (!validW.has(wsId)) {
+        closeTab(tabId)
+        continue
+      }
+      if (sid && !validS.has(`${wsId}::${sid}`)) {
+        closeTab(tabId)
+      }
+    }
+  }, [hasLoaded, workspaces, closeTab])
+
+  const spawn = useCallback(
+    async (wsId: string, opts: SpawnOpts = {}): Promise<void> => {
+      try {
+        const sess = await spawnSession(wsId, opts)
+        const nowIso = new Date().toISOString()
+        const newRecord: SessionRecord = {
+          id: sess.sessionId,
+          wsId,
+          agent: sess.agent,
+          name: sess.name,
+          createdAt: nowIso,
+          lastActiveAt: nowIso,
+          state: 'running',
+          agentSessionId: sess.agentSessionId,
+          pid: sess.pid,
+          startedAt: sess.startedAt,
+        }
+        setWorkspaces((prev) =>
+          prev.map((w) =>
+            w.id === wsId ? { ...w, sessions: [...w.sessions, newRecord] } : w,
+          ),
+        )
+        openOrFocus({ kind: 'workspace', params: { wsId, sessionId: sess.sessionId } })
+        void refresh()
+      } catch (err) {
+        console.error('workspaces.spawn_failed', { wsId, opts, err })
+      }
+    },
+    [refresh, openOrFocus],
+  )
+
+  const pauseSession = useCallback(
+    async (wsId: string, sessionId: string): Promise<void> => {
+      setWorkspaces((prev) =>
+        patchSession(prev, wsId, sessionId, {
+          state: 'paused',
+          pid: null,
+          startedAt: null,
+          lastActiveAt: new Date().toISOString(),
+        }),
+      )
+      await apiPauseSession(wsId, sessionId)
+      void refresh()
+    },
+    [refresh],
+  )
+
+  const resumeSession = useCallback(
+    async (wsId: string, sessionId: string): Promise<void> => {
+      const resp = await apiResumeSession(wsId, sessionId)
+      if (resp) {
+        setWorkspaces((prev) =>
+          patchSession(prev, wsId, sessionId, {
+            state: 'running',
+            pid: resp.pid,
+            startedAt: resp.startedAt,
+            lastActiveAt: new Date().toISOString(),
+          }),
+        )
+      }
+      openOrFocus({ kind: 'workspace', params: { wsId, sessionId } })
+      void refresh()
+    },
+    [refresh, openOrFocus],
+  )
+
+  const deleteSession = useCallback(
+    async (wsId: string, sessionId: string): Promise<void> => {
+      // Optimistic remove.
+      setWorkspaces((prev) =>
+        prev.map((w) =>
+          w.id === wsId ? { ...w, sessions: w.sessions.filter((s) => s.id !== sessionId) } : w,
+        ),
+      )
+      // Close any tab pinned to this session immediately (don't wait for the
+      // reconcile effect — gives instant UI feedback).
+      const tabsSnap = useWorkspace.getState().tabs
+      for (const tabId of Object.keys(tabsSnap)) {
+        const t = tabsSnap[tabId]
+        if (t && t.spec.kind === 'workspace' && t.spec.params.sessionId === sessionId) {
+          closeTab(tabId)
+        }
+      }
+      await apiDeleteSession(wsId, sessionId)
+      void refresh()
+    },
+    [refresh, closeTab],
+  )
+
+  return (
+    <WorkspacesContext.Provider
+      value={{
+        workspaces,
+        templates,
+        agents,
+        listError,
+        refresh,
+        spawn,
+        pauseSession,
+        resumeSession,
+        deleteSession,
+        openAgentConfig: (wsId: string) => setConfiguringWsId(wsId),
+      }}
+    >
+      {children}
+      {configuringWsId !== null && (
+        <WorkspaceAIConfigModal
+          wsId={configuringWsId}
+          onClose={() => setConfiguringWsId(null)}
+        />
+      )}
+    </WorkspacesContext.Provider>
+  )
+}
+
+export function useWorkspaces(): WorkspacesContextValue {
+  const ctx = useContext(WorkspacesContext)
+  if (!ctx) throw new Error('useWorkspaces must be used within WorkspacesProvider')
+  return ctx
+}
+
+function patchSession(
+  workspaces: readonly Workspace[],
+  wsId: string,
+  sessionId: string,
+  patch: Partial<SessionRecord>,
+): Workspace[] {
+  return workspaces.map((w) =>
+    w.id === wsId
+      ? { ...w, sessions: w.sessions.map((s) => (s.id === sessionId ? { ...s, ...patch } : s)) }
+      : w,
+  )
+}

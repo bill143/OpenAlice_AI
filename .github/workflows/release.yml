@@ -1,0 +1,129 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history for git-cliff
+
+      - name: Get version from package.json
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+          # Determine if pre-release (contains - like beta.1, rc.1)
+          if [[ "$VERSION" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if tag already exists
+        id: check
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install git-cliff
+        if: steps.check.outputs.exists == 'false'
+        uses: kenji-miyake/setup-git-cliff@v2
+
+      - name: Generate release notes
+        if: steps.check.outputs.exists == 'false'
+        id: notes
+        run: |
+          # Generate notes for this version only (since last tag)
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            git-cliff --output notes.md
+          else
+            git-cliff "$LAST_TAG"..HEAD --output notes.md
+          fi
+
+      - name: Create tag and GitHub Release
+        if: steps.check.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          body_path: notes.md
+          prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
+          generate_release_notes: false
+
+  publish-opentypebb:
+    runs-on: ubuntu-latest
+    needs: release
+    if: needs.release.result == 'success'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+
+      - name: Check published versions
+        id: check
+        working-directory: packages/opentypebb
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          if npm view "@traderalice/opentypebb@$VERSION" version --registry=https://npm.pkg.github.com 2>/dev/null; then
+            echo "ghpkg=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ghpkg=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if npm view "@traderalice/opentypebb@$VERSION" version --registry=https://registry.npmjs.org 2>/dev/null; then
+            echo "npmjs=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "npmjs=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build
+        if: steps.check.outputs.ghpkg == 'false' || steps.check.outputs.npmjs == 'false'
+        working-directory: packages/opentypebb
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Publish to GitHub Packages
+        if: steps.check.outputs.ghpkg == 'false'
+        working-directory: packages/opentypebb
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to npmjs
+        if: steps.check.outputs.npmjs == 'false'
+        working-directory: packages/opentypebb
+        run: |
+          echo "//registry.npmjs.org/:_authToken=\${NODE_AUTH_TOKEN}" > "$NPM_CONFIG_USERCONFIG"
+          npm publish --registry=https://registry.npmjs.org
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pnpm -F open-alice-ui build:demo",
+  "outputDirectory": "ui/dist",
+  "installCommand": "pnpm install --frozen-lockfile --filter='!@traderalice/desktop'",
+  "framework": null,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

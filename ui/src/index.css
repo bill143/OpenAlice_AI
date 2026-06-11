@@ -1,0 +1,540 @@
+@import "tailwindcss";
+
+/* GitHub Dark theme palette */
+@theme {
+  --color-bg: #0d1117;
+  --color-bg-secondary: #161b22;
+  --color-bg-tertiary: #21262d;
+  --color-border: #30363d;
+  --color-text: #e6edf3;
+  --color-text-muted: #8b949e;
+  --color-accent: #58a6ff;
+  --color-accent-dim: rgba(31, 111, 235, 0.2);
+  --color-user-bubble: #1f6feb;
+  --color-assistant-bubble: #161b22;
+  --color-notification-bg: #2d1f00;
+  --color-notification-border: #d29922;
+  --color-green: #3fb950;
+  --color-red: #f85149;
+  --color-purple: #a78bfa;
+  --color-purple-dim: rgba(139, 92, 246, 0.2);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", "Hiragino Sans GB", "Noto Sans CJK SC", sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Consolas,
+    monospace;
+}
+
+/* Japanese gets a JP-first sans stack so shared Han characters render in
+   Japanese glyph forms, not the Simplified-Chinese forms the default stack
+   would pick (Han unification). Scoped via <html lang="ja">, which the locale
+   store keeps in sync. */
+:root:lang(ja) {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", "YuGothic",
+    "Meiryo", "Noto Sans JP", sans-serif;
+}
+
+/* Traditional Chinese (Hant script) gets a Traditional-first sans stack so
+   shared Han characters render in Traditional forms, not the Simplified ones
+   the default stack would pick. Scoped via <html lang="zh-Hant"> — region-
+   neutral (serves both Taiwan and Hong Kong Traditional readers). */
+:root:lang(zh-Hant) {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang TC", "Microsoft JhengHei", "Noto Sans TC",
+    "Noto Sans CJK TC", sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* ==================== Typography scale ====================
+   Five semantic sizes covering the entire app. New code should
+   prefer these over arbitrary `text-[Npx]` so size choices stay
+   consistent and a future global tweak is one edit.
+   - .text-display  hero numbers (UTA NLV, Portfolio total)
+   - .text-title    page H2 / dialog title
+   - .text-body     primary body text, table rows, buttons
+   - .text-caption  secondary descriptions, subtitles
+   - .text-micro    badges, timestamps, table metadata */
+
+.text-display {
+  @apply text-[28px] md:text-[36px] font-bold leading-tight tabular-nums;
+}
+.text-title {
+  @apply text-[16px] font-semibold leading-snug;
+}
+.text-body {
+  @apply text-[13px] leading-relaxed;
+}
+.text-caption {
+  @apply text-[12px] leading-relaxed;
+}
+.text-micro {
+  @apply text-[11px] tracking-wide;
+}
+
+/* ==================== Live-data pulse ====================
+   Small breathing dot used in PageHeader to communicate "this
+   surface is auto-refreshing". 2.4s cycle so it reads as ambient
+   not anxious. Color is the success/green token to keep the
+   association with "alive + healthy". */
+
+@keyframes live-pulse {
+  0%, 100% {
+    opacity: 0.55;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+.live-pulse {
+  animation: live-pulse 2.4s ease-in-out infinite;
+}
+.live-pulse::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  background: var(--color-green);
+  opacity: 0.3;
+  animation: live-pulse 2.4s ease-in-out infinite;
+  animation-delay: 0.3s;
+}
+
+/* ==================== Button utility classes ==================== */
+
+.btn-primary {
+  @apply px-4 py-2 text-[13px] font-medium rounded-lg
+    bg-bg-tertiary border border-border text-text
+    hover:border-accent/40 hover:bg-bg-tertiary/80 transition-all active:scale-[0.98]
+    disabled:opacity-40 disabled:cursor-default cursor-pointer
+    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
+}
+
+.btn-secondary {
+  @apply px-4 py-2 text-[13px] font-medium rounded-lg border border-border text-text-muted
+    hover:bg-bg-tertiary hover:text-text transition-all active:scale-[0.98]
+    disabled:opacity-40 disabled:cursor-default cursor-pointer
+    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
+}
+
+.btn-danger {
+  @apply px-4 py-2 text-[13px] font-medium rounded-lg border border-red/30 text-red
+    hover:bg-red/10 transition-all active:scale-[0.98]
+    disabled:opacity-40 disabled:cursor-default cursor-pointer
+    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red/40 focus-visible:ring-offset-2 focus-visible:ring-offset-bg;
+}
+
+.btn-primary-sm {
+  @apply px-3 py-1.5 text-xs font-medium rounded-md
+    bg-bg-tertiary border border-border text-text
+    hover:border-accent/40 hover:bg-bg-tertiary/80 transition-all active:scale-[0.98]
+    disabled:opacity-40 disabled:cursor-default cursor-pointer
+    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-bg;
+}
+
+.btn-secondary-sm {
+  @apply px-3 py-1.5 text-xs font-medium rounded-md border border-border text-text-muted
+    hover:bg-bg-tertiary hover:text-text transition-all active:scale-[0.98]
+    disabled:opacity-40 disabled:cursor-default cursor-pointer
+    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-bg;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+/* Hide scrollbar utility — content still scrolls (programmatically or via
+   wheel/trackpad), the bar itself just doesn't render. Used on the tab
+   strip so a long row of tabs doesn't reserve a thick horizontal track. */
+.scrollbar-hide {
+  scrollbar-width: none;       /* Firefox */
+  -ms-overflow-style: none;    /* IE / old Edge */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;               /* Chromium / WebKit */
+}
+
+/* Markdown content inside assistant messages */
+.markdown-content p {
+  margin: 0.5em 0;
+}
+.markdown-content p:first-child {
+  margin-top: 0;
+}
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+.markdown-content pre {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 12px;
+  overflow-x: auto;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.markdown-content code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.markdown-content :not(pre) > code {
+  background: var(--color-bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.markdown-content ul,
+.markdown-content ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+/* Tailwind preflight resets list-style to none — restore markers. */
+.markdown-content ul {
+  list-style: disc;
+}
+.markdown-content ol {
+  list-style: decimal;
+}
+.markdown-content li {
+  margin: 0.25em 0;
+}
+.markdown-content li::marker {
+  color: var(--color-text-muted);
+}
+/* Obsidian-style [[name]] wikilinks → clickable entity references. */
+.markdown-content a.wikilink {
+  color: var(--color-accent);
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-accent) 45%, transparent);
+}
+.markdown-content a.wikilink:hover {
+  border-bottom-style: solid;
+}
+.markdown-content blockquote {
+  border-left: 3px solid var(--color-accent);
+  padding-left: 12px;
+  color: var(--color-text-muted);
+  margin: 0.5em 0;
+}
+.markdown-content table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  width: 100%;
+}
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid var(--color-border);
+  padding: 6px 12px;
+  text-align: left;
+}
+.markdown-content th {
+  background: var(--color-bg-tertiary);
+}
+.markdown-content img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 8px 0;
+}
+.markdown-content a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+.markdown-content a:hover {
+  text-decoration: underline;
+}
+.markdown-content h1 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin: 0.75em 0 0.5em;
+}
+.markdown-content h2 {
+  font-size: 1.125em;
+  font-weight: 600;
+  margin: 0.75em 0 0.5em;
+}
+.markdown-content h3 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 0.5em 0 0.25em;
+}
+.markdown-content h1:first-child,
+.markdown-content h2:first-child,
+.markdown-content h3:first-child {
+  margin-top: 0;
+}
+
+/* Thinking animation */
+@keyframes blink {
+  0%,
+  20% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+  80%,
+  100% {
+    opacity: 0.2;
+  }
+}
+.thinking-dot {
+  animation: blink 0.9s infinite;
+  font-size: 20px;
+  line-height: 1;
+}
+.thinking-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.thinking-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+/* Message entrance animation */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.message-enter {
+  animation: fadeSlideIn 0.3s ease-out;
+}
+
+/* Page transition animation */
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.page-fade-in {
+  animation: pageFadeIn 150ms ease-out;
+}
+
+/* Code block wrapper for copy button */
+.code-block-wrapper {
+  position: relative;
+}
+.code-block-wrapper .code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  padding: 4px 8px 4px 12px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+.code-block-wrapper .code-copy-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+  font-family: var(--font-sans);
+}
+.code-block-wrapper .code-copy-btn:hover {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.06);
+}
+.code-block-wrapper .code-copy-btn.copied {
+  color: var(--color-green);
+}
+.code-block-wrapper pre {
+  margin-top: 0 !important;
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+}
+
+/* ==================== Automation Flow (React Flow) ==================== */
+
+/* Producer nodes (leftmost column — pure event sources) */
+.react-flow__node.flow-producer-node {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+  border: 1px solid #a371f7;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 180px;
+  text-align: center;
+  box-shadow: 0 0 0 1px rgba(163, 113, 247, 0.12);
+}
+
+/* Wildcard producer — directional halo on the right (toward events) */
+.react-flow__node.flow-producer-emit-wildcard {
+  position: relative;
+}
+.react-flow__node.flow-producer-emit-wildcard::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  width: 80px;
+  height: 120%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at left center,
+    rgba(163, 113, 247, 0.45) 0%,
+    rgba(163, 113, 247, 0.15) 40%,
+    rgba(163, 113, 247, 0) 75%
+  );
+  animation: flow-wildcard-breath 2.4s ease-in-out infinite;
+}
+
+/* Event-type nodes (inputs + outputs) */
+.react-flow__node.flow-event-node {
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  min-width: 140px;
+  text-align: center;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Listener nodes (middle column) */
+.react-flow__node.flow-listener-node {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+  border: 1px solid var(--color-accent);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 200px;
+  text-align: center;
+  box-shadow: 0 0 0 1px rgba(88, 166, 255, 0.1);
+}
+
+/* Pulse animation when an event of this type fires */
+.react-flow__node.flow-pulse {
+  animation: flow-pulse 800ms ease-out;
+  border-color: var(--color-accent);
+}
+@keyframes flow-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(88, 166, 255, 0.6);
+    border-color: var(--color-accent);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgba(88, 166, 255, 0);
+    border-color: var(--color-border);
+  }
+}
+
+/* React Flow background + controls theming */
+.react-flow__controls {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.react-flow__controls-button {
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+.react-flow__controls-button:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+}
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+
+/* External events (webhook-reachable) get a dashed teal outline */
+.react-flow__node.flow-event-external {
+  border-color: var(--color-accent);
+  border-style: dashed;
+}
+
+/* ==================== Wildcard listener auras ====================
+   A listener declared with `subscribes: '*'` or `emits: '*'` gets a
+   soft directional halo instead of N individual edges. Emit-side is
+   green (matches emit edge color), subscribe-side is blue (matches
+   subscribe edge color). Breathing animation is slower and softer
+   than the event-pulse animation to stay ambient. */
+
+.react-flow__node.flow-listener-emit-wildcard {
+  /* ensure absolutely-positioned pseudo-elements are anchored here */
+  position: relative;
+}
+.react-flow__node.flow-listener-emit-wildcard::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  width: 80px;
+  height: 120%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at left center,
+    rgba(63, 185, 80, 0.45) 0%,
+    rgba(63, 185, 80, 0.15) 40%,
+    rgba(63, 185, 80, 0) 75%
+  );
+  animation: flow-wildcard-breath 2.4s ease-in-out infinite;
+}
+
+.react-flow__node.flow-listener-sub-wildcard {
+  position: relative;
+}
+.react-flow__node.flow-listener-sub-wildcard::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  width: 80px;
+  height: 120%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at right center,
+    rgba(88, 166, 255, 0.45) 0%,
+    rgba(88, 166, 255, 0.15) 40%,
+    rgba(88, 166, 255, 0) 75%
+  );
+  animation: flow-wildcard-breath 2.4s ease-in-out infinite;
+}
+
+@keyframes flow-wildcard-breath {
+  0%, 100% { opacity: 0.55; transform: translateY(-50%) scale(1); }
+  50%      { opacity: 1;    transform: translateY(-50%) scale(1.08); }
+}
