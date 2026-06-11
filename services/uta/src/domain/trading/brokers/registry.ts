@@ -16,6 +16,7 @@ import { AlpacaBroker } from './alpaca/AlpacaBroker.js'
 import { IbkrBroker } from './ibkr/IbkrBroker.js'
 import { LeverupBroker } from './others/leverup/index.js'
 import { LongbridgeBroker } from './longbridge/index.js'
+import { TradovateBroker } from './tradovate/index.js'
 import { MockBroker } from './mock/MockBroker.js'
 import type { BrokerEngine } from '@traderalice/uta-protocol'
 
@@ -47,6 +48,10 @@ export const BROKER_ENGINE_REGISTRY: Record<BrokerEngine, BrokerEngineEntry> = {
   longbridge: {
     configSchema: LongbridgeBroker.configSchema,
     fromConfig: LongbridgeBroker.fromConfig,
+  },
+  tradovate: {
+    configSchema: TradovateBroker.configSchema,
+    fromConfig: TradovateBroker.fromConfig,
   },
   mock: {
     configSchema: MockBroker.configSchema,

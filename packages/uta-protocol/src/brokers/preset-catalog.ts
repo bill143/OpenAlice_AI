@@ -15,7 +15,7 @@ import { createHash, randomBytes } from 'node:crypto'
 
 // ==================== Types ====================
 
-export type BrokerEngine = 'ccxt' | 'alpaca' | 'ibkr' | 'leverup' | 'longbridge' | 'mock'
+export type BrokerEngine = 'ccxt' | 'alpaca' | 'ibkr' | 'leverup' | 'longbridge' | 'tradovate' | 'mock'
 
 export interface ModeOption {
   id: string
@@ -386,6 +386,47 @@ export const LONGBRIDGE_PRESET: BrokerPresetDef = {
   isPaper: (d) => d.mode === 'paper',
 }
 
+export const TRADOVATE_PRESET: BrokerPresetDef = {
+  id: 'tradovate',
+  label: 'Tradovate (Futures)',
+  description: 'Tradovate REST API — CME/CBOT/NYMEX/COMEX futures and options-on-futures.',
+  category: 'recommended',
+  hint: 'Get API credentials from Tradovate → Application Settings → API Access (appId, cid, sec). **Demo uses Tradovate\'s free simulation host — no real money.** Demo and Live share your login but route to different hosts; keep this on Demo for exploration.',
+  defaultName: 'tradovate-demo',
+  badge: 'TV',
+  badgeColor: 'text-accent',
+  engine: 'tradovate',
+  guardCategory: 'securities',
+  modes: [
+    { id: 'demo', label: 'Demo (Simulation)' },
+    { id: 'live', label: 'Live Trading' },
+  ],
+  zodSchema: z.object({
+    mode: z.enum(['demo', 'live']).default('demo').describe('Mode'),
+    username: z.string().min(1).describe('Username'),
+    password: z.string().min(1).describe('Password'),
+    appId: z.string().min(1).describe('App ID'),
+    appVersion: z.string().default('1.0').describe('App Version'),
+    cid: z.string().min(1).describe('API Client ID'),
+    sec: z.string().min(1).describe('API Secret'),
+  }),
+  subtitleFields: [
+    { field: 'mode', prefix: 'Tradovate · ' },
+  ],
+  writeOnlyFields: ['password', 'sec'],
+  fingerprintFields: ['mode', 'username', 'cid'],
+  toEngineConfig: (d) => ({
+    username: d.username,
+    password: d.password,
+    appId: d.appId,
+    appVersion: d.appVersion,
+    cid: d.cid,
+    sec: d.sec,
+    demo: d.mode === 'demo',
+  }),
+  isPaper: (d) => d.mode === 'demo',
+}
+
 // ==================== Other ecosystem brokers (lower-tier, isolated) ====================
 
 export const LEVERUP_PRESET: BrokerPresetDef = {
@@ -461,6 +502,7 @@ export const BROKER_PRESET_CATALOG: BrokerPresetDef[] = [
   // prototype was modeled on its API).
   IBKR_PRESET,
   ALPACA_PRESET,
+  TRADOVATE_PRESET,
   LONGBRIDGE_PRESET,
   HYPERLIQUID_PRESET,
   // ---- Crypto ----
